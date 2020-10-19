@@ -41,6 +41,13 @@ binned_data_train, binned_data_test = univariate_plotter(data=data_train, target
 binned_data_train = univariate_plotter(data=data_train, target_col='target', feature='DAYS_EMPLOYED')
 ```
 
+### Exporting plots to excel
+
+```bash
+from featexp import get_univariate_plots
+get_univariate_plots(data=data_train, target_col='target', features_list=data_train.columns[0:10],data_test=data_test,show_plots=False,export_to_excel=True)
+```
+
 ### Getting stats for all features
 
 Returns trend changes and trend correlation for all features in a dataframe
