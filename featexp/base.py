@@ -1,23 +1,70 @@
 import pandas as pd
 import numpy as np
+import os
+import matplotlib
 
 from matplotlib import pyplot as plt
 
 
+class ExportToExcel():
+    """
+        export to excel plots for easier reading, sharing of plots
+    """
+    def __init__(self):
+        self.path = 'plots.xlsx'
+        self.writer = pd.ExcelWriter(self.path, engine='xlsxwriter')
+        self.workbook  = self.writer.book
+        self.worksheet = self.workbook.add_worksheet("PLOTS")
+
+        #excel template setups
+
+        column_format = self.workbook.add_format({'text_wrap': True})
+        self.worksheet.set_column('A:A', 60,column_format)
+
+        self.worksheet.set_column('B:B', 135)
+
+        column_format = self.workbook.add_format({'text_wrap': True})
+        column_format.set_align('top')
+        self.worksheet.set_column('F:F', 60,column_format)
+
+        bold_cell_format = self.workbook.add_format({'bold': True,'color':'white'})
+        bold_cell_format.set_align('center')
+        bold_cell_format.set_align('vcenter')
+        bold_cell_format.set_bg_color('green')
+        self.worksheet.write('A1', 'Feature',bold_cell_format)
+        self.worksheet.write('B1', 'Plots',bold_cell_format)
+        self.worksheet.write('C1', 'Max Prob',bold_cell_format)
+        self.worksheet.write('D1', 'Min Prob',bold_cell_format)
+        self.worksheet.write('E1', 'Max-Min',bold_cell_format)
+        self.worksheet.write('F1', 'Notes',bold_cell_format)
+
+        self.plain_cell_format = self.workbook.add_format()
+        self.plain_cell_format.set_align('center')
+        self.plain_cell_format.set_align('vcenter')
+
+    def add_row(self,index,train_test,image,mx,mn,mx_mn,row_size=600):
+        self.worksheet.set_row(index-1, row_size)
+        self.worksheet.write('A{}'.format(index), train_test,self.plain_cell_format)
+        self.worksheet.insert_image('B{}'.format(index), image,{'x_scale': 0.8, 'y_scale': 0.8,'x_offset': 14, 'y_offset': 10})
+        self.worksheet.write('C{}'.format(index), mx,self.plain_cell_format)
+        self.worksheet.write('D{}'.format(index), mn,self.plain_cell_format)
+        self.worksheet.write('E{}'.format(index), mx_mn,self.plain_cell_format)
+
+
 def get_grouped_data(input_data, feature, target_col, bins, cuts=0):
     """
-    Bins continuous features into equal sample size buckets and 
-    returns the target mean in each bucket. Separates out nulls into 
-    another bucket.
-    
-    :param input_data: dataframe containg features and target column.
-    :param feature: feature column name.
-    :param target_col: target column.
-    :param bins: Number bins required.
-    :param cuts: if buckets of certain specific cuts are required. Used 
-    on test data to use cuts from train.
-    :return: If cuts are passed only grouped data is returned, else cuts 
-    and grouped data is returned.
+        Bins continuous features into equal sample size buckets and 
+        returns the target mean in each bucket. Separates out nulls into 
+        another bucket.
+        
+        :param input_data: dataframe containg features and target column.
+        :param feature: feature column name.
+        :param target_col: target column.
+        :param bins: Number bins required.
+        :param cuts: if buckets of certain specific cuts are required. Used 
+        on test data to use cuts from train.
+        :return: If cuts are passed only grouped data is returned, else cuts 
+        and grouped data is returned.
     """
 
     input_data[feature] = input_data[feature].round(5)
@@ -98,79 +145,115 @@ def get_grouped_data(input_data, feature, target_col, bins, cuts=0):
         return grouped
 
 
-def draw_plots(input_data, feature, target_col, trend_correlation=None):
+def draw_plots(input_data, feature, target_col,show_plots,export_to_excel,trend_correlation=None):
     """
-    Draws univariate dependence plots for a feature.
-    
-    :param input_data: grouped data contained bins of feature and 
-    target mean.
-    :param feature: feature column name.
-    :param target_col: target column.
-    :param trend_correlation: correlation between train and test trends 
-    of feature wrt target.
-    :return: Draws trend plots for feature.
+        Draws univariate dependence plots for a feature.
+        :param input_data: grouped data contained bins of feature and 
+        target mean.
+        :param feature: feature column name.
+        :param target_col: target column.
+        :param trend_correlation: correlation between train and test trends 
+        of feature wrt target.
+        :return: Draws trend plots for feature.
     """
+    train_input_data,test_input_data = input_data
+    nrows=2
+    data = {1:train_input_data,2:train_input_data,3:test_input_data,4:test_input_data}
 
-    trend_changes = get_trend_changes(
-        grouped_data=input_data, feature=feature, target_col=target_col
-    )
-    plt.figure(figsize=(12, 5))
-    ax1 = plt.subplot(1, 2, 1)
-    ax1.plot(input_data[target_col + "_mean"], marker="o")
-    ax1.set_xticks(np.arange(len(input_data)))
-    ax1.set_xticklabels((input_data[feature]).astype("str"))
-    plt.xticks(rotation=45)
-    ax1.set_xlabel("Bins of " + feature)
-    ax1.set_ylabel("Average of " + target_col)
-    comment = "Trend changed " + str(trend_changes) + " times"
-    if trend_correlation == 0:
-        comment = comment + "\n" + "Correlation with train trend: NA"
-    elif trend_correlation != None:
-        comment = (
-            comment
-            + "\n"
-            + "Correlation with train trend: "
-            + str(int(trend_correlation * 100))
-            + "%"
-        )
+    has_test = type(test_input_data) == pd.core.frame.DataFrame
 
-    props = dict(boxstyle="round", facecolor="wheat", alpha=0.3)
-    ax1.text(
-        0.05,
-        0.95,
-        comment,
-        fontsize=12,
-        verticalalignment="top",
-        bbox=props,
-        transform=ax1.transAxes,
-    )
-    plt.title("Average of " + target_col + " wrt " + feature)
+    if has_test==False:
+        nrows = 1
+        
+    fig, big_axes = plt.subplots( figsize=(12.0, 5.0 if nrows==1 else 10.0) , nrows=nrows, ncols=1, sharey=True) 
+    big_axes=[big_axes] if nrows==1 else big_axes
 
-    ax2 = plt.subplot(1, 2, 2)
-    ax2.bar(
-        np.arange(len(input_data)), input_data["Samples_in_bin"], alpha=0.5
-    )
-    ax2.set_xticks(np.arange(len(input_data)))
-    ax2.set_xticklabels((input_data[feature]).astype("str"))
-    plt.xticks(rotation=45)
-    ax2.set_xlabel("Bins of " + feature)
-    ax2.set_ylabel("Bin-wise sample size")
-    plt.title("Samples in bins of " + feature)
+    for row, big_ax in enumerate(big_axes, start=1):
+        if row==1:
+            big_ax.set_title("{} \n" .format("Train"), fontsize=16)
+        elif row==2:
+            big_ax.set_title("{} \n" .format("Test"), fontsize=16)
+
+        # Turn off axis lines and ticks of the big subplot 
+        # obs alpha is 0 in RGBA string!
+        big_ax.tick_params(labelcolor=(1.,1.,1., 0.0), top='off', bottom='off', left='off', right='off')
+        # removes the white frame
+        big_ax._frameon = False
+
+
+    for i in range(1,(nrows*2)+1):
+        ax = fig.add_subplot(nrows,2,i)
+        if i==1 or i==3:
+            input_data=data[i]
+            trend_changes = get_trend_changes(
+                grouped_data=input_data, feature=feature, target_col=target_col
+            )
+            ax.plot(input_data[target_col + "_mean"], marker="o")
+            ax.set_title("Average of " + target_col + " wrt " + feature)
+            ax.set_xticks(np.arange(len(input_data)))
+            ax.set_xticklabels((input_data[feature]).astype("str"))
+            plt.xticks(rotation=45)
+            ax.set_xlabel("Bins of " + feature)
+            ax.set_ylabel("Average of " + target_col)
+            comment = "Trend changed " + str(trend_changes) + " times"
+            if trend_correlation == 0 and i==3:
+                comment = comment + "\n" + "Correlation with train trend: NA"
+            elif trend_correlation != None and i==3:
+                comment = (
+                    comment
+                    + "\n"
+                    + "Correlation with train trend: "
+                    + str(int(trend_correlation * 100))
+                    + "%"
+                )
+
+            props = dict(boxstyle="round", facecolor="wheat", alpha=0.3)
+            ax.text(
+                0.05,
+                0.95,
+                comment,
+                fontsize=12,
+                verticalalignment="top",
+                bbox=props,
+                transform=ax.transAxes,
+            )
+        elif i==2 or i==4:
+            input_data=data[i]
+            ax.bar(
+                np.arange(len(input_data)), input_data["Samples_in_bin"], alpha=0.5
+            )
+            ax.set_xticks(np.arange(len(input_data)))
+            ax.set_xticklabels((input_data[feature]).astype("str"))
+            plt.xticks(rotation=45)
+            ax.set_xlabel("Bins of " + feature)
+            ax.set_ylabel("Bin-wise sample size")
+            ax.set_title("Samples in bins of " + feature)
+
+
+    fig.set_facecolor('w')
     plt.tight_layout()
-    plt.show()
 
+    
+    if export_to_excel:
+        plt.savefig('{}.png'.format(feature))
+
+    if show_plots:
+        plt.show()
+
+    plt.close('all')
+
+    
 
 def get_trend_changes(grouped_data, feature, target_col, threshold=0.03):
     """
-    Calculates number of times the trend of feature wrt target changed
-    direction.
-    
-    :param grouped_data: grouped dataset.
-    :param feature: feature column name.
-    :param target_col: target column.
-    :param threshold: minimum % difference required to count as trend 
-    change.
-    :return: number of trend chagnes for the feature.
+        Calculates number of times the trend of feature wrt target changed
+        direction.
+        :param grouped_data: grouped dataset.
+        :param feature: feature column name.
+        :param target_col: target column.
+        :param threshold: minimum % difference required to count as trend 
+        change.
+        :return: number of trend chagnes for the feature.
     """
 
     grouped_data = grouped_data.loc[
@@ -195,14 +278,14 @@ def get_trend_changes(grouped_data, feature, target_col, threshold=0.03):
 
 def get_trend_correlation(grouped, grouped_test, feature, target_col):
     """
-    Calculates correlation between train and test trend of feature 
-    wrt target.
-    
-    :param grouped: train grouped data.
-    :param grouped_test: test grouped data.
-    :param feature: feature column name.
-    :param target_col: target column name.
-    :return: trend correlation between train and test.
+        Calculates correlation between train and test trend of feature 
+        wrt target.
+        
+        :param grouped: train grouped data.
+        :param grouped_test: test grouped data.
+        :param feature: feature column name.
+        :param target_col: target column name.
+        :return: trend correlation between train and test.
     """
 
     grouped = grouped[grouped[feature] != "Nulls"].reset_index(drop=True)
@@ -241,21 +324,26 @@ def get_trend_correlation(grouped, grouped_test, feature, target_col):
     return trend_correlation
 
 
-def univariate_plotter(feature, data, target_col, bins=10, data_test=0):
-    """
-    Calls the draw plot function and editing around the plots.
+def univariate_plotter(xlsx,show_plots,export_to_excel,feature, data, target_col, bins=10, data_test=0,plot_number=0):
     
-    :param feature: feature column name.
-    :param data: dataframe containing features and target columns.
-    :param target_col: target column name.
-    :param bins: number of bins to be created from continuous feature.
-    :param data_test: test data which has to be compared with input data 
-    for correlation.
-    :return: grouped data if only train passed, else (grouped train 
-    data, grouped test data).
+  
+    """
+        Calls the draw plot function and editing around the plots.
+        
+        :param feature: feature column name.
+        :param data: dataframe containing features and target columns.
+        :param target_col: target column name.
+        :param bins: number of bins to be created from continuous feature.
+        :param data_test: test data which has to be compared with input data 
+        for correlation.
+        :return: grouped data if only train passed, else (grouped train 
+        data, grouped test data).
     """
 
-    print(" {:^100} ".format("Plots for " + feature))
+    if show_plots:
+        print(" {:^100} ".format("Plots for " + feature))
+    
+
     if data[feature].dtype == "O":
         print("Categorical feature not supported")
     else:
@@ -263,6 +351,9 @@ def univariate_plotter(feature, data, target_col, bins=10, data_test=0):
             input_data=data, feature=feature, target_col=target_col, bins=bins
         )
         has_test = type(data_test) == pd.core.frame.DataFrame
+
+    
+
         if has_test:
             grouped_test = get_grouped_data(
                 input_data=data_test.reset_index(drop=True),
@@ -274,53 +365,77 @@ def univariate_plotter(feature, data, target_col, bins=10, data_test=0):
             trend_corr = get_trend_correlation(
                 grouped, grouped_test, feature, target_col
             )
-            print(" {:^100} ".format("Train data plots"))
+           
+            
+
+            _input_data = (grouped,grouped_test)
 
             draw_plots(
-                input_data=grouped, feature=feature, target_col=target_col
-            )
-            print(" {:^100} ".format("Test data plots"))
-
-            draw_plots(
-                input_data=grouped_test,
+                input_data=_input_data,
                 feature=feature,
                 target_col=target_col,
                 trend_correlation=trend_corr,
+                show_plots=show_plots,
+                export_to_excel=export_to_excel
             )
+
+            max_prob = grouped[target_col + "_mean"].max()
+            min_prob = grouped[target_col + "_mean"].min()
+
+            xlsx.add_row(index=plot_number+1,train_test=feature,image='{}.png'.format(feature),mx=max_prob,mn=min_prob,mx_mn=max_prob-min_prob)
+
         else:
+            _input_data = (grouped,None)
+
             draw_plots(
-                input_data=grouped, feature=feature, target_col=target_col
+                input_data=_input_data, feature=feature, target_col=target_col,show_plots=show_plots,export_to_excel=export_to_excel
             )
-        print(
-            "----------------------------------------------------------"
-            "----------------------------------------------------"
-        )
-        print("\n")
+
+            max_prob = grouped[target_col + "_mean"].max()
+            min_prob = grouped[target_col + "_mean"].min()
+
+            xlsx.add_row(index=plot_number+1,train_test=feature,image='{}.png'.format(feature),mx=max_prob,mn=min_prob,mx_mn=max_prob-min_prob,row_size=300)
+        
+        if show_plots:
+            
+            print("\n")
+
+          
+
         if has_test:
             return (grouped, grouped_test)
         else:
             return grouped
 
 
-def get_univariate_plots(
-    data, target_col, features_list=0, bins=10, data_test=0
-):
+def get_univariate_plots( data, target_col,features_list=0, bins=10, data_test=0,show_plots=True,export_to_excel=False):
+    
+    xlsx = ExportToExcel()
+
+    if show_plots==False:
+        matplotlib.use('Agg')
+        
     """
-    Creates univariate dependence plots for features in the dataset
-    :param data: dataframe containing features and target columns
-    :param target_col: target column name
-    :param features_list: by default creates plots for all features. If 
-    list passed, creates plots of only those features
-    :param bins: number of bins to be created from continuous feature
-    :param data_test: test data which has to be compared with input 
-    data for correlation
-    :return: Draws univariate plots for all columns in data
+        Creates univariate dependence plots for features in the dataset
+        :param data: dataframe containing features and target columns
+        :param target_col: target column name
+        :param features_list: by default creates plots for all features. If 
+        list passed, creates plots of only those features
+        :param bins: number of bins to be created from continuous feature
+        :param data_test: test data which has to be compared with input 
+        data for correlation
+        :return: Draws univariate plots for all columns in data
     """
+   
     if type(features_list) == int:
         features_list = list(data.columns)
         features_list.remove(target_col)
 
-    for cols in features_list:
+    has_test = type(data_test) == pd.core.frame.DataFrame
+
+    
+    for i in range(len(features_list)):
+        cols = features_list[i]
         if cols != target_col and data[cols].dtype == "O":
             print(
                 cols
@@ -328,28 +443,52 @@ def get_univariate_plots(
             )
         elif cols != target_col and data[cols].dtype != "O":
             univariate_plotter(
+                xlsx=xlsx,
                 feature=cols,
                 data=data,
                 target_col=target_col,
                 bins=bins,
                 data_test=data_test,
+                plot_number=i+1,
+                show_plots=show_plots,
+                export_to_excel=export_to_excel
+                
             )
+    
+
+    #add stats to excel
+    if export_to_excel:
+        if has_test:
+            stats = get_trend_stats(data=data, target_col=target_col, data_test=data_test)
+            stats.to_excel(xlsx.writer, sheet_name='STATS',index=False)
+            xlsx.writer.save()
+        else:
+            stats = get_trend_stats(data=data, target_col=target_col)
+            stats.to_excel(xlsx.writer, sheet_name='STATS',index=False)
+            xlsx.writer.save()
+
+
+        from IPython.display import FileLink,display
+        display(FileLink(xlsx.path))
+
+        os.system("rm *.png")
+    
 
 
 def get_trend_stats(data, target_col, features_list=0, bins=10, data_test=0):
     """
-    Calculates trend changes and correlation between train/test for 
-    list of features.
-    
-    :param data: dataframe containing features and target columns.
-    :param target_col: target column name.
-    :param features_list: by default creates plots for all features. If 
-    list passed, creates plots of only those features.
-    :param bins: number of bins to be created from continuous feature.
-    :param data_test: test data which has to be compared with input data 
-    for correlation.
-    :return: dataframe with trend changes and trend correlation 
-    (if test data passed).
+        Calculates trend changes and correlation between train/test for 
+        list of features.
+        
+        :param data: dataframe containing features and target columns.
+        :param target_col: target column name.
+        :param features_list: by default creates plots for all features. If 
+        list passed, creates plots of only those features.
+        :param bins: number of bins to be created from continuous feature.
+        :param data_test: test data which has to be compared with input data 
+        for correlation.
+        :return: dataframe with trend changes and trend correlation 
+        (if test data passed).
     """
 
     if type(features_list) == int:
