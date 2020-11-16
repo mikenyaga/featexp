@@ -56,6 +56,7 @@ class ExportPlotsToExcel():
         :param image: plot image
         :param mx: maximum of target_col mean
         :param mn: minimum of target_col mean
+        :param mx_mn: max-min indicates feature separability power
         :param has_test: controls row_size
         :return: new row with plot
         """
