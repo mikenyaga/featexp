@@ -48,7 +48,7 @@ from featexp import get_univariate_plots
 get_univariate_plots(data=data_train, target_col='target', features_list=data_train.columns[0:10],data_test=data_test,show_plots=False,export_to_excel=True)
 ```
 
-![Plots](plots.xlsx)
+[Plots sample report](plots.xlsx)
 
 
 ### Getting stats for all features
