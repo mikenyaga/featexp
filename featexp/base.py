@@ -6,18 +6,23 @@ import matplotlib
 from matplotlib import pyplot as plt
 
 
-class ExportToExcel():
+class ExportPlotsToExcel():
     """
-        export to excel plots for easier reading, sharing of plots
+    Class to export plots to excel row by row
+
+    xlsx = ExportPlotsToExcel()
     """
     def __init__(self):
+        """
+        Initialise excel workbook and setup default format
+        see generate plots.xlsx
+        """
         self.path = 'plots.xlsx'
         self.writer = pd.ExcelWriter(self.path, engine='xlsxwriter')
         self.workbook  = self.writer.book
         self.worksheet = self.workbook.add_worksheet("PLOTS")
 
-        #excel template setups
-
+       
         column_format = self.workbook.add_format({'text_wrap': True})
         self.worksheet.set_column('A:A', 60,column_format)
 
@@ -42,7 +47,22 @@ class ExportToExcel():
         self.plain_cell_format.set_align('center')
         self.plain_cell_format.set_align('vcenter')
 
-    def add_row(self,index,train_test,image,mx,mn,mx_mn,row_size=600):
+    def save_plot(self,index,train_test,image,mx,mn,mx_mn,has_test=True):
+        """
+        Saves plots images into excel sheet named "PLOTS" row by row
+
+        :param index: row number
+        :param train_test: 'Train' or 'Test' 
+        :param image: plot image
+        :param mx: maximum of target_col mean
+        :param mn: minimum of target_col mean
+        :param has_test: controls row_size
+        :return: new row with plot
+        """
+        if has_test:
+            row_size=600
+        else:
+            row_size=300
         self.worksheet.set_row(index-1, row_size)
         self.worksheet.write('A{}'.format(index), train_test,self.plain_cell_format)
         self.worksheet.insert_image('B{}'.format(index), image,{'x_scale': 0.8, 'y_scale': 0.8,'x_offset': 14, 'y_offset': 10})
@@ -145,7 +165,7 @@ def get_grouped_data(input_data, feature, target_col, bins, cuts=0):
         return grouped
 
 
-def draw_plots(input_data, feature, target_col,show_plots,export_to_excel,trend_correlation=None):
+def draw_plots(input_data, feature, target_col,trend_correlation=None,show_plots=True,export_to_excel=False):
     """
         Draws univariate dependence plots for a feature.
         :param input_data: grouped data contained bins of feature and 
@@ -154,7 +174,9 @@ def draw_plots(input_data, feature, target_col,show_plots,export_to_excel,trend_
         :param target_col: target column.
         :param trend_correlation: correlation between train and test trends 
         of feature wrt target.
-        :return: Draws trend plots for feature.
+        :param show_plots: if to show plots on the screen (stdout) - they can be so many , 1000 features
+        :param export_to_excel: if to generate excel report with plots instead
+        :return: Draws trend plots for feature or save figure for export
     """
     train_input_data,test_input_data = input_data
     nrows=2
@@ -233,14 +255,17 @@ def draw_plots(input_data, feature, target_col,show_plots,export_to_excel,trend_
     fig.set_facecolor('w')
     plt.tight_layout()
 
-    
+    #optional to export plots to excel
     if export_to_excel:
         plt.savefig('{}.png'.format(feature))
 
+    #optional to show plots on console
     if show_plots:
         plt.show()
-
-    plt.close('all')
+    
+    # release resources
+    if show_plots==False:
+        plt.close('all')
 
     
 
@@ -324,7 +349,7 @@ def get_trend_correlation(grouped, grouped_test, feature, target_col):
     return trend_correlation
 
 
-def univariate_plotter(xlsx,show_plots,export_to_excel,feature, data, target_col, bins=10, data_test=0,plot_number=0):
+def univariate_plotter(feature, data, target_col, bins=10, data_test=0,plot_number=0,show_plots=True,export_to_excel=False,xlsx=None):
     
   
     """
@@ -336,10 +361,15 @@ def univariate_plotter(xlsx,show_plots,export_to_excel,feature, data, target_col
         :param bins: number of bins to be created from continuous feature.
         :param data_test: test data which has to be compared with input data 
         for correlation.
+        :param plot_number: each test/train plot is assigned a number for tracking purposes and saving into respective excel row number
+        :param show_plots: optional to show plots on the screen (stdout) - they can be so many , 1000 features
+        :param export_to_excel: if to generate excel report with plots instead
+        :param xlsx: excel export class object
         :return: grouped data if only train passed, else (grouped train 
         data, grouped test data).
     """
 
+    #make it optional to show plots to console
     if show_plots:
         print(" {:^100} ".format("Plots for " + feature))
     
@@ -368,6 +398,11 @@ def univariate_plotter(xlsx,show_plots,export_to_excel,feature, data, target_col
            
             
 
+            """
+                refactored input_data to tuple type (train_grouped, test_grouped)
+                calls draw_plots function once
+                for ploting train/test as one 2x4 grid
+            """
             _input_data = (grouped,grouped_test)
 
             draw_plots(
@@ -382,9 +417,16 @@ def univariate_plotter(xlsx,show_plots,export_to_excel,feature, data, target_col
             max_prob = grouped[target_col + "_mean"].max()
             min_prob = grouped[target_col + "_mean"].min()
 
-            xlsx.add_row(index=plot_number+1,train_test=feature,image='{}.png'.format(feature),mx=max_prob,mn=min_prob,mx_mn=max_prob-min_prob)
+            if export_to_excel:
+                xlsx.save_plot(index=plot_number+1,train_test=feature,image='{}.png'.format(feature),mx=max_prob,mn=min_prob,mx_mn=max_prob-min_prob)
 
         else:
+            """
+                refactored input_data to tuple type (train_grouped, None) - no test data provided
+                train is mandatory
+                calls draw_plots function once
+                for ploting train/test as one 2x2 grid
+            """
             _input_data = (grouped,None)
 
             draw_plots(
@@ -394,13 +436,12 @@ def univariate_plotter(xlsx,show_plots,export_to_excel,feature, data, target_col
             max_prob = grouped[target_col + "_mean"].max()
             min_prob = grouped[target_col + "_mean"].min()
 
-            xlsx.add_row(index=plot_number+1,train_test=feature,image='{}.png'.format(feature),mx=max_prob,mn=min_prob,mx_mn=max_prob-min_prob,row_size=300)
+            if export_to_excel:
+                xlsx.save_plot(index=plot_number+1,train_test=feature,image='{}.png'.format(feature),mx=max_prob,mn=min_prob,mx_mn=max_prob-min_prob,has_test=has_test)
         
-        if show_plots:
-            
+        #make it optional to show plots to console
+        if show_plots: 
             print("\n")
-
-          
 
         if has_test:
             return (grouped, grouped_test)
@@ -410,11 +451,6 @@ def univariate_plotter(xlsx,show_plots,export_to_excel,feature, data, target_col
 
 def get_univariate_plots( data, target_col,features_list=0, bins=10, data_test=0,show_plots=True,export_to_excel=False):
     
-    xlsx = ExportToExcel()
-
-    if show_plots==False:
-        matplotlib.use('Agg')
-        
     """
         Creates univariate dependence plots for features in the dataset
         :param data: dataframe containing features and target columns
@@ -424,8 +460,20 @@ def get_univariate_plots( data, target_col,features_list=0, bins=10, data_test=0
         :param bins: number of bins to be created from continuous feature
         :param data_test: test data which has to be compared with input 
         data for correlation
+        :param show_plots: if to show plots on the screen (stdout) - they can be so many , 1000 features
+        :param export_to_excel: if to generate excel report with plots instead
         :return: Draws univariate plots for all columns in data
     """
+
+    #init plots to excel object at entry
+    xlsx = None
+    if export_to_excel:
+        xlsx = ExportPlotsToExcel()
+
+    #make it optional to show plots to console
+    #if false use matplotlib bancground engine
+    if show_plots==False:
+        matplotlib.use('Agg')
    
     if type(features_list) == int:
         features_list = list(data.columns)
@@ -443,7 +491,6 @@ def get_univariate_plots( data, target_col,features_list=0, bins=10, data_test=0
             )
         elif cols != target_col and data[cols].dtype != "O":
             univariate_plotter(
-                xlsx=xlsx,
                 feature=cols,
                 data=data,
                 target_col=target_col,
@@ -451,12 +498,13 @@ def get_univariate_plots( data, target_col,features_list=0, bins=10, data_test=0
                 data_test=data_test,
                 plot_number=i+1,
                 show_plots=show_plots,
-                export_to_excel=export_to_excel
+                export_to_excel=export_to_excel,
+                xlsx=xlsx
                 
             )
     
 
-    #add stats to excel
+    #if export to excel true, add stats sheet to the workbook
     if export_to_excel:
         if has_test:
             stats = get_trend_stats(data=data, target_col=target_col, data_test=data_test)
