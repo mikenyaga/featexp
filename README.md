@@ -45,7 +45,9 @@ binned_data_train = univariate_plotter(data=data_train, target_col='target', fea
 
 ```bash
 from featexp import get_univariate_plots
-get_univariate_plots(data=data_train, target_col='target', features_list=data_train.columns[0:10],data_test=data_test,show_plots=False,export_to_excel=True)```
+get_univariate_plots(data=data_train, target_col='target', features_list=data_train.columns[0:10],data_test=data_test,show_plots=False,export_to_excel=True)
+```
+
 ![Plots](plots.xlsx)
 
 
